@@ -12,6 +12,8 @@ urlpatterns = [
 
     url(r'^players/', include('server.apps.players.urls')),
     url(r'^rooms/', include('server.apps.rooms.urls')),
+    url(r'^stats/', include('server.apps.stats.urls')),
+
     url(r'^latest-roomtimes/$', LatestRoomtimeListView.as_view(),
         name='roomtime_latest_list'),
 ]

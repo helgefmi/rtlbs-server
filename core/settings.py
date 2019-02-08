@@ -28,6 +28,7 @@ INSTALLED_APPS = [
 
     'server.apps.players',
     'server.apps.rooms',
+    'server.apps.stats',
 ]
 
 MIDDLEWARE = [

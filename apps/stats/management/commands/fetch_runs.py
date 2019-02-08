@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+import dateutil.parser
+import requests
+
+from django.core.management.base import BaseCommand
+
+from server.apps.stats.models import Run, Player, Category
+
+
+def parse_date(s):
+    return dateutil.parser.parse(s).date()
+
+
+def parse_datetime(s):
+    return dateutil.parser.parse(s)
+
+
+def fetch(url):
+    print(url)
+    response = requests.get(url)
+    return response.json()
+
+
+def get_next_url(data):
+    for link in data['pagination']['links']:
+        if link['rel'] == 'next':
+            return link['uri']
+
+
+def get_category(run):
+    return Category.objects.filter(id__in=run['values'].values()).first()
+
+
+class Command(BaseCommand):
+    help = 'Fetch data from SRC'
+    fetched_players = None
+
+    def __init__(self, *args, **kwargs):
+        self.fetched_players = {}
+        super().__init__(*args, **kwargs)
+
+    def update_player(self, player_id):
+        player = self.fetched_players.get(player_id)
+
+        if player is None:
+            data = fetch('https://www.speedrun.com/api/v1/users/{}'.format(player_id))['data']
+
+            player = Player.objects.filter(id=data['id']).first() or Player(id=data['id'])
+            player.id = data['id']
+            player.link = data['weblink']
+            player.signed_up = parse_datetime(data['signup'])
+            player.location = data['location']['country']['names']['international'] if data['location'] else ''
+            player.twitch_url = data['twitch']['uri'] if data['twitch'] else ''
+            player.save()
+
+            self.fetched_players[player_id] = player
+        return player
+
+    def update_run(self, data):
+        if len(data['players']) != 1:
+            return
+
+        if not data['players'][0].get('id'):
+            return
+
+        player = self.update_player(data['players'][0]['id'])
+
+        moderator = None
+        if data['status'].get('examiner'):
+            moderator = self.update_player(data['status']['examiner'])
+
+        run = Run.objects.filter(id=data['id']).first() or Run(id=data['id'])
+        run.id = data['id']
+        run.link = data['weblink']
+        run.category = get_category(data)
+        run.comment = data['comment']
+        run.status = data['status']['status']
+        run.moderator = moderator
+        run.player = player
+        run.date = parse_date(data['date'] or data['submitted'])
+        run.emulated = data['system']['emulated']
+        run.save()
+
+    def handle(self, *args, **options):
+        # self.update_categories()
+        self.update_runs()
+
+    def update_runs(self):
+        next_url = 'https://www.speedrun.com/api/v1/runs?game=9d3rr0dl&offset=400&max=200'
+        while next_url:
+            data = fetch(next_url)
+            for run in data['data']:
+                try:
+                    self.update_run(run)
+                except Exception:
+                    print(run)
+                    raise
+            next_url = get_next_url(data)
+
+    def update_categories(self):
+        data = fetch('https://www.speedrun.com/api/v1/games/9d3rr0dl/variables')
+        for parent in data['data']:
+            if parent['name'] != 'Sub Category':
+                continue
+
+            parent_category = fetch('https://www.speedrun.com/api/v1/categories/{}'.format(parent['category']))
+            for cat_id, cat_data in parent['values']['values'].items():
+                category = Category.objects.filter(id=cat_id).first() or Category(id=cat_id)
+                category.name = cat_data['label']
+                category.type = parent_category['data']['name']
+                category.save()
