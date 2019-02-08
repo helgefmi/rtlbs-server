@@ -63,11 +63,13 @@ class Command(BaseCommand):
         if not data['players'][0].get('id'):
             return
 
-        player = self.update_player(data['players'][0]['id'])
+        # player = self.update_player(data['players'][0]['id'])
+        player = Player.objects.get(id=data['players'][0]['id'])
 
         moderator = None
         if data['status'].get('examiner'):
-            moderator = self.update_player(data['status']['examiner'])
+            # moderator = self.update_player(data['status']['examiner'])
+            moderator = Player.objects.get(id=data['status']['examiner'])
 
         run = Run.objects.filter(id=data['id']).first() or Run(id=data['id'])
         run.id = data['id']
@@ -75,18 +77,15 @@ class Command(BaseCommand):
         run.category = get_category(data)
         run.comment = data['comment']
         run.status = data['status']['status']
+        run.time = data['times']['primary_t']
         run.moderator = moderator
         run.player = player
         run.date = parse_date(data['date'] or data['submitted'])
         run.emulated = data['system']['emulated']
         run.save()
 
-    def handle(self, *args, **options):
-        # self.update_categories()
-        self.update_runs()
-
     def update_runs(self):
-        next_url = 'https://www.speedrun.com/api/v1/runs?game=9d3rr0dl&offset=400&max=200'
+        next_url = 'https://www.speedrun.com/api/v1/runs?game=9d3rr0dl&max=200'
         while next_url:
             data = fetch(next_url)
             for run in data['data']:
@@ -109,3 +108,7 @@ class Command(BaseCommand):
                 category.name = cat_data['label']
                 category.type = parent_category['data']['name']
                 category.save()
+
+    def handle(self, *args, **options):
+        self.update_categories()
+        self.update_runs()

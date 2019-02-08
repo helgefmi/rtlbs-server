@@ -25,5 +25,6 @@ class RunListView(generics.ListAPIView):
 
 class StatsView(APIView):
     def dispatch(self, request):
-        stats = get_stats()
+        category = request.GET.get('category', 'all')
+        stats = get_stats(category)
         return JsonResponse(stats)
