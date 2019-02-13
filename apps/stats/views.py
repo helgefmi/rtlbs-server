@@ -1,3 +1,5 @@
+import dateutil.parser
+
 from django.http import JsonResponse
 
 from rest_framework import generics
@@ -5,7 +7,7 @@ from rest_framework.views import APIView
 
 from . import serializers
 from .models import Category, Player, Run
-from .utils import get_stats
+from .utils import get_stats, get_leaderboards
 
 
 class CategoryListView(generics.ListAPIView):
@@ -28,3 +30,14 @@ class StatsView(APIView):
         category = request.GET.get('category', 'all')
         stats = get_stats(category)
         return JsonResponse(stats)
+
+
+class LeaderboardsView(APIView):
+    def dispatch(self, request):
+        category = request.GET['category']
+        lbs_date = dateutil.parser.parse(request.GET['date']).date()
+
+        lbs = get_leaderboards(category, lbs_date)
+        return JsonResponse({
+            'lbs': lbs,
+        })

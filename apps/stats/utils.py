@@ -2,7 +2,7 @@ import time
 from collections import defaultdict
 from datetime import date, timedelta
 
-from django.db.models import Count
+from django.db.models import Count, Min
 
 from .models import Run, Category
 
@@ -163,3 +163,22 @@ def get_stats(category_id):
         'run': get_run_stats(category_id),
         'table': get_table_stats(),
     }
+
+
+def parse_time(t):
+    h = int(t / 60 / 60)
+    m = int(t / 60 % 60)
+    s = int(t % 60)
+    return '%d:%02d:%02d' % (h, m, s)
+
+
+def get_leaderboards(category_id, lbs_date):
+    qs = Run.objects.filter(date__lte=lbs_date, status='verified', category=category_id)
+    qs = qs.values('player__name').annotate(best=Min('time')).order_by('best')
+    ret = []
+    for data in qs:
+        ret.append({
+            'player': data['player__name'],
+            'time': parse_time(data['best'])
+        })
+    return ret
