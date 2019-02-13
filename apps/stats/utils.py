@@ -6,18 +6,18 @@ from .models import Run, Category
 
 
 def _ts(d):
-    d = d - timedelta(days=d.weekday())
+    d = d.replace(day=1)
     return int(time.mktime(d.timetuple()) * 1000)
 
 
-def _group_stats(stats):
+def _process_run_stats(stats):
     ret = []
     for k in sorted(stats.keys()):
         ret.append([k, stats[k]])
     return ret
 
 
-def _pb_stats(data):
+def _process_nmg_stats(data):
     ret = []
     all_pbs = list(sorted(set(pb for pb_data in data.values() for pb in pb_data.keys())))
     for year, pb_data in sorted(data.items()):
@@ -38,8 +38,7 @@ def _pb_stats(data):
 def get_nmg_stats():
     nmg = Category.objects.get(id='013xwzr1')
 
-    qs = Run.objects.order_by('date')
-    qs = qs.filter(status='verified', date__gte=date(2014, 1, 1), category=nmg)
+    qs = Run.objects.filter(status='verified', date__gte=date(2014, 1, 1), category=nmg)
 
     current_pb = {}
     pbs_by_year = defaultdict(lambda: defaultdict(set))
@@ -51,18 +50,17 @@ def get_nmg_stats():
                 pbs_by_year[run.date.year][x].add(run.player_id)
         current_pb[run.player_id] = new_pb
 
-    return _pb_stats(pbs_by_year)
+    return _process_nmg_stats(pbs_by_year)
 
 
-def get_stats(category_id):
+def get_run_stats(category_id):
     stats = {
         'total': defaultdict(int),
         'runs': defaultdict(int),
         'new': defaultdict(int),
     }
 
-    qs = Run.objects.order_by('date')
-    qs = qs.filter(status='verified', date__gte=date(2014, 1, 1))
+    qs = Run.objects.filter(status='verified', date__gte=date(2014, 1, 1))
     if category_id != 'all':
         qs = qs.filter(category_id=category_id)
 
@@ -70,7 +68,13 @@ def get_stats(category_id):
     added_players = set()
     added_ts = set()
 
+    min_rundate = date.today()
+    max_rundate = date(2000, 1, 1)
+
     for run in qs:
+        max_rundate = max(max_rundate, run.date)
+        min_rundate = min(min_rundate, run.date)
+
         ts = _ts(run.date)
         added_ts.add(ts)
         total += 1
@@ -82,13 +86,80 @@ def get_stats(category_id):
             stats['new'][ts] += 1
             added_players.add(run.player_id)
 
-    for stat in stats.values():
-        for ts in added_ts:
-            stat[ts] = stat[ts] or 0
+    # Add in missing 0's
+    d = min_rundate.replace(day=1)
+    last_d = max_rundate.replace(day=1)
+    while d < last_d:
+        ts = _ts(d)
+        stats['new'][ts] = stats['new'][ts] or 0
+        stats['runs'][ts] = stats['runs'][ts] or 0
+        d = (d + timedelta(days=33)).replace(day=1)
 
     return {
-        'pbStats': get_nmg_stats(),
-        'total': _group_stats(stats['total']),
-        'runs': _group_stats(stats['runs']),
-        'new': _group_stats(stats['new']),
+        'total': _process_run_stats(stats['total']),
+        'runs': _process_run_stats(stats['runs']),
+        'new': _process_run_stats(stats['new']),
+    }
+
+
+def _order_by_max(d):
+    return sorted(d.items(), key=lambda x: x[1], reverse=True)[:10]
+
+
+def get_table_stats():
+    stats = {
+        'pbs': defaultdict(int),
+        'country': defaultdict(int),
+        'categories': defaultdict(set),
+        'moderators': defaultdict(int),
+    }
+    all_players = {}
+
+    qs = Run.objects.filter(status='verified', date__gte=date(2014, 1, 1)).select_related('player')
+    for run in qs:
+        all_players[run.player_id] = run.player
+
+        stats['pbs'][run.player_id] += 1
+        stats['country'][run.player.location] += 1
+        stats['categories'][run.player_id].add(run.category_id)
+        stats['moderators'][run.moderator_id] += 1
+
+    for player_id in stats['categories']:
+        stats['categories'][player_id] = len(stats['categories'][player_id])
+
+    ret = {
+        'pbs': [],
+        'country': [],
+        'categories': [],
+        'moderators': [],
+    }
+    for player_id, num_pbs in _order_by_max(stats['pbs']):
+        ret['pbs'].append({
+            'key': all_players[player_id].name,
+            'value': num_pbs,
+        })
+    for country, num_pbs in _order_by_max(stats['country']):
+        ret['country'].append({
+            'key': country or '(Not set)',
+            'value': num_pbs,
+        })
+    for player_id, num_categories in _order_by_max(stats['categories']):
+        ret['categories'].append({
+            'key': all_players[player_id].name,
+            'value': num_categories,
+        })
+    for player_id, num_moderated in _order_by_max(stats['moderators']):
+        ret['moderators'].append({
+            'key': all_players[player_id].name,
+            'value': num_moderated,
+        })
+
+    return ret
+
+
+def get_stats(category_id):
+    return {
+        'nmg': get_nmg_stats(),
+        'run': get_run_stats(category_id),
+        'table': get_table_stats(),
     }
