@@ -31,6 +31,13 @@ def _process_nmg_stats(data):
             pb_data.append(data[year][pb] or 0)
         ret.append(pb_data)
 
+    pct_of_year = (date.today() - date.today().replace(day=1, month=1)).days / 365.
+
+    projected_data = ['{} (projected)'.format(date.today().year)]
+    for num in ret[-1][1:]:
+        projected_data.append(int(num / pct_of_year))
+    ret.append(projected_data)
+
     return {
         'data': ret,
         'pbs': all_pbs,
