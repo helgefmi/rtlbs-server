@@ -112,7 +112,7 @@ def get_run_stats(category_id):
 
 
 def _order_by_max(d):
-    return sorted(d.items(), key=lambda x: x[1], reverse=True)[:10]
+    return sorted(d.items(), key=lambda x: x[1], reverse=True)[:40]
 
 
 def get_table_stats():
@@ -155,7 +155,7 @@ def get_table_stats():
             'key': all_players[player_id].name,
             'value': num_categories,
         })
-    for data in Run.objects.values('moderator__name').annotate(Count('id')).order_by('-id__count')[:10]:
+    for data in Run.objects.values('moderator__name').annotate(Count('id')).order_by('-id__count')[:40]:
         ret['moderators'].append({
             'key': data['moderator__name'],
             'value': data['id__count'],
