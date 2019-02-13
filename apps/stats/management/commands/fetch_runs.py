@@ -77,14 +77,31 @@ class Command(BaseCommand):
 
         return player
 
+    def get_player(self, players):
+        if len(players) != 1:
+            return
+
+        player_data = players[0]
+
+        if player_data.get('id'):
+            player = self.update_player(player_data['id'])
+        else:
+            assert player_data.get('rel') == 'guest'
+
+            player_id = 'guest-{}'.format(player_data['name'])
+            player = Player.objects.filter(id=player_id).first()
+
+            if player is None:
+                player = Player.objects.create(id=player_id,
+                                               name=player_data['name'],
+                                               link=player_data['uri'])
+
+            self.fetched_players[player.id] = player
+
+        return player
+
     def update_run(self, data):
-        if len(data['players']) != 1:
-            return
-
-        if not data['players'][0].get('id'):
-            return
-
-        player = self.update_player(data['players'][0]['id'])
+        player = self.get_player(data['players'])
 
         moderator = None
         if data['status'].get('examiner'):

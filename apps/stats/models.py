@@ -23,8 +23,8 @@ class Player(models.Model):
     id = models.TextField(primary_key=True)
     name = models.TextField()
     link = models.TextField()
-    signed_up = models.DateTimeField()
-    location = models.TextField()
+    signed_up = models.DateTimeField(null=True, blank=True)
+    location = models.TextField(blank=True)
     twitch_url = models.TextField(null=True, blank=True)
 
 
