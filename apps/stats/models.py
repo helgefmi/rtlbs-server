@@ -7,17 +7,21 @@ class Run(models.Model):
     link = models.TextField()
     category = models.ForeignKey('stats.Category', null=True, blank=True, on_delete=models.SET_NULL)
     comment = models.TextField(null=True, blank=True)
-    status = models.TextField()
+    status = models.TextField(db_index=True)
     time = models.IntegerField()
     player = models.ForeignKey('stats.Player', on_delete=models.CASCADE)
     moderator = models.ForeignKey('stats.Player', null=True, blank=True, on_delete=models.SET_NULL,
                                   related_name='moderated_run_set')
-    date = models.DateField()
+    date = models.DateField(db_index=True)
     emulated = models.BooleanField()
+
+    class Meta:
+        ordering = ['date']
 
 
 class Player(models.Model):
     id = models.TextField(primary_key=True)
+    name = models.TextField()
     link = models.TextField()
     signed_up = models.DateTimeField()
     location = models.TextField()

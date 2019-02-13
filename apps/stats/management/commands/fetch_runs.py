@@ -34,26 +34,47 @@ def get_category(run):
 class Command(BaseCommand):
     help = 'Fetch data from SRC'
     fetched_players = None
+    full_sync = None
 
     def __init__(self, *args, **kwargs):
         self.fetched_players = {}
         super().__init__(*args, **kwargs)
 
+    def add_arguments(self, parser):
+        parser.add_argument('--full-sync', action='store_true',
+                            dest='full_sync', default=False,
+                            help='Will be slow!')
+
+    def handle(self, **options):
+        self.full_sync = options['full_sync']
+        self.update_categories()
+        self.update_runs()
+
     def update_player(self, player_id):
         player = self.fetched_players.get(player_id)
+        if player:
+            return player
 
-        if player is None:
-            data = fetch('https://www.speedrun.com/api/v1/users/{}'.format(player_id))['data']
+        player = Player.objects.filter(id=player_id).first()
 
-            player = Player.objects.filter(id=data['id']).first() or Player(id=data['id'])
-            player.id = data['id']
-            player.link = data['weblink']
-            player.signed_up = parse_datetime(data['signup'])
-            player.location = data['location']['country']['names']['international'] if data['location'] else ''
-            player.twitch_url = data['twitch']['uri'] if data['twitch'] else ''
-            player.save()
+        if not self.full_sync and player:
+            return player
 
-            self.fetched_players[player_id] = player
+        if not player:
+            player = Player(id=player_id)
+
+        data = fetch('https://www.speedrun.com/api/v1/users/{}'.format(player_id))['data']
+
+        player.id = data['id']
+        player.link = data['weblink']
+        player.signed_up = parse_datetime(data['signup'])
+        player.location = data['location']['country']['names']['international'] if data['location'] else ''
+        player.name = data['names']['international']
+        player.twitch_url = data['twitch']['uri'] if data['twitch'] else ''
+        player.save()
+
+        self.fetched_players[player_id] = player
+
         return player
 
     def update_run(self, data):
@@ -63,15 +84,20 @@ class Command(BaseCommand):
         if not data['players'][0].get('id'):
             return
 
-        # player = self.update_player(data['players'][0]['id'])
-        player = Player.objects.get(id=data['players'][0]['id'])
+        player = self.update_player(data['players'][0]['id'])
 
         moderator = None
         if data['status'].get('examiner'):
-            # moderator = self.update_player(data['status']['examiner'])
-            moderator = Player.objects.get(id=data['status']['examiner'])
+            moderator = self.update_player(data['status']['examiner'])
 
-        run = Run.objects.filter(id=data['id']).first() or Run(id=data['id'])
+        run = Run.objects.filter(id=data['id']).first()
+
+        if not self.full_sync and run:
+            return run
+
+        if run is None:
+            run = Run(id=data['id'])
+
         run.id = data['id']
         run.link = data['weblink']
         run.category = get_category(data)
@@ -104,11 +130,12 @@ class Command(BaseCommand):
 
             parent_category = fetch('https://www.speedrun.com/api/v1/categories/{}'.format(parent['category']))
             for cat_id, cat_data in parent['values']['values'].items():
-                category = Category.objects.filter(id=cat_id).first() or Category(id=cat_id)
+                category = Category.objects.filter(id=cat_id).first()
+
+                if not self.full_sync and category:
+                    continue
+
+                category = category or Category(id=cat_id)
                 category.name = cat_data['label']
                 category.type = parent_category['data']['name']
                 category.save()
-
-    def handle(self, *args, **options):
-        self.update_categories()
-        self.update_runs()
