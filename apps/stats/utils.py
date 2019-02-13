@@ -2,6 +2,8 @@ import time
 from collections import defaultdict
 from datetime import date, timedelta
 
+from django.db.models import Count
+
 from .models import Run, Category
 
 
@@ -111,7 +113,6 @@ def get_table_stats():
         'pbs': defaultdict(int),
         'country': defaultdict(int),
         'categories': defaultdict(set),
-        'moderators': defaultdict(int),
     }
     all_players = {}
 
@@ -122,7 +123,6 @@ def get_table_stats():
         stats['pbs'][run.player_id] += 1
         stats['country'][run.player.location] += 1
         stats['categories'][run.player_id].add(run.category_id)
-        stats['moderators'][run.moderator_id] += 1
 
     for player_id in stats['categories']:
         stats['categories'][player_id] = len(stats['categories'][player_id])
@@ -148,10 +148,10 @@ def get_table_stats():
             'key': all_players[player_id].name,
             'value': num_categories,
         })
-    for player_id, num_moderated in _order_by_max(stats['moderators']):
+    for data in Run.objects.values('moderator__name').annotate(Count('id')).order_by('-id__count')[:10]:
         ret['moderators'].append({
-            'key': all_players[player_id].name,
-            'value': num_moderated,
+            'key': data['moderator__name'],
+            'value': data['id__count'],
         })
 
     return ret
