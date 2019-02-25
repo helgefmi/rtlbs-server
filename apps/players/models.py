@@ -1,6 +1,7 @@
 # coding: utf-8
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
+from django.contrib.auth.validators import ASCIIUsernameValidator
 
 from server.core.validators import UnicodeUsernameValidator
 
@@ -29,7 +30,7 @@ class Player(AbstractBaseUser):
         'Username',
         max_length=150,
         unique=True,
-        validators=[UnicodeUsernameValidator()],
+        validators=[UnicodeUsernameValidator(), ASCIIUsernameValidator()],
         error_messages={
             'unique': "A player with that username already exists.",
         }

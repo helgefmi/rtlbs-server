@@ -31,6 +31,10 @@ class PlayerSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
+        username = validated_data['username']
+        if Player.objects.filter(username__iexact=username).exists():
+            raise serializers.ValidationError('Username is already in use!')
+
         password = validated_data.pop('password')
         player = super().create(validated_data)
         player.set_password(password)
