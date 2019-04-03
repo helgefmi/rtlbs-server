@@ -47,7 +47,7 @@ def _process_nmg_stats(data):
 def get_nmg_stats():
     nmg = Category.objects.get(id='013xwzr1')
 
-    qs = Run.objects.filter(status='verified', date__gte=date(2014, 1, 1), category=nmg)
+    qs = Run.objects.filter(status='verified', date__gte=date(2012, 1, 1), category=nmg)
 
     current_pb = {}
     pbs_by_year = defaultdict(lambda: defaultdict(set))
@@ -69,7 +69,7 @@ def get_run_stats(category_id):
         'new': defaultdict(int),
     }
 
-    qs = Run.objects.filter(status='verified', date__gte=date(2014, 1, 1))
+    qs = Run.objects.filter(status='verified', date__gte=date(2012, 1, 1))
     if category_id != 'all':
         qs = qs.filter(category_id=category_id)
 
@@ -123,7 +123,7 @@ def get_table_stats():
     }
     all_players = {}
 
-    qs = Run.objects.filter(status='verified', date__gte=date(2014, 1, 1)).select_related('player')
+    qs = Run.objects.filter(status='verified', date__gte=date(2012, 1, 1)).select_related('player')
     for run in qs:
         all_players[run.player_id] = run.player
 
