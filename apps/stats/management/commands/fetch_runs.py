@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import dateutil.parser
 import requests
+from datetime import datetime
 
 from django.core.management.base import BaseCommand
 
@@ -13,12 +14,6 @@ def parse_date(s):
 
 def parse_datetime(s):
     return dateutil.parser.parse(s)
-
-
-def fetch(url):
-    print(url)
-    response = requests.get(url)
-    return response.json()
 
 
 def get_next_url(data):
@@ -35,6 +30,7 @@ class Command(BaseCommand):
     help = 'Fetch data from SRC'
     fetched_players = None
     full_sync = None
+    debug = False
 
     def __init__(self, *args, **kwargs):
         self.fetched_players = {}
@@ -45,10 +41,25 @@ class Command(BaseCommand):
                             dest='full_sync', default=False,
                             help='Will be slow!')
 
+        parser.add_argument('--debug', action='store_true',
+                            dest='debug', default=False,
+                            help='Prints some info to stdout')
+
     def handle(self, **options):
         self.full_sync = options['full_sync']
+        self.debug = options['debug']
+
         self.update_categories()
         self.update_runs()
+
+    def log(self, *args, **kwargs):
+        if self.debug:
+            print(datetime.now(), *args, **kwargs)
+
+    def fetch(self, url):
+        self.log(url)
+        response = requests.get(url)
+        return response.json()
 
     def update_player(self, player_id):
         player = self.fetched_players.get(player_id)
@@ -63,7 +74,7 @@ class Command(BaseCommand):
         if not player:
             player = Player(id=player_id)
 
-        data = fetch('https://www.speedrun.com/api/v1/users/{}'.format(player_id))['data']
+        data = self.fetch('https://www.speedrun.com/api/v1/users/{}'.format(player_id))['data']
 
         player.id = data['id']
         player.link = data['weblink']
@@ -102,6 +113,9 @@ class Command(BaseCommand):
 
     def update_run(self, data):
         player = self.get_player(data['players'])
+        if not player:
+            self.log('No player')
+            return
 
         moderator = None
         if data['status'].get('examiner'):
@@ -130,7 +144,7 @@ class Command(BaseCommand):
     def update_runs(self):
         next_url = 'https://www.speedrun.com/api/v1/runs?game=9d3rr0dl&max=200'
         while next_url:
-            data = fetch(next_url)
+            data = self.fetch(next_url)
             for run in data['data']:
                 try:
                     self.update_run(run)
@@ -140,12 +154,12 @@ class Command(BaseCommand):
             next_url = get_next_url(data)
 
     def update_categories(self):
-        data = fetch('https://www.speedrun.com/api/v1/games/9d3rr0dl/variables')
+        data = self.fetch('https://www.speedrun.com/api/v1/games/9d3rr0dl/variables')
         for parent in data['data']:
             if parent['name'] != 'Sub Category':
                 continue
 
-            parent_category = fetch('https://www.speedrun.com/api/v1/categories/{}'.format(parent['category']))
+            parent_category = self.fetch('https://www.speedrun.com/api/v1/categories/{}'.format(parent['category']))
             for cat_id, cat_data in parent['values']['values'].items():
                 category = Category.objects.filter(id=cat_id).first()
 
